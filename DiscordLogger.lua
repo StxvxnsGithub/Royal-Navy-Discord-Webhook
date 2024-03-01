@@ -59,7 +59,7 @@ function discord.basicSend(message)
 			warn("Failed to log to RN Server. ERROR: " .. response)
 			print("Attempting ERROR logging...")
 			
-			-- As error may be due to a data format error, attempts a simple error log
+			-- As error may be due to a data format error, attempts a simple (non-embed) error log
 			local secondarySuccess, secondaryResponse = pcall(function() 
 				return HttpService:PostAsync(url, HttpService:JSONEncode({content = ownerPing .. " **ERROR:** Message send failed " .. response}))
 			end)
