@@ -1,4 +1,4 @@
--- Discord Logger
+-- Discord Logger --
 local versionNo = 0.5
 
 ----------------------------------------------
