@@ -16,6 +16,6 @@ Planned Features:
 
 <ul>
   <li>Join/Leave Logging</li>
-  <li>Rate Limiting</li>
+  <li><s>Rate Limiting</s> COMPLETED</li>
   <li>Spawn Logs</li>
 </ul>
