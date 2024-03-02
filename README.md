@@ -3,7 +3,7 @@
 </h1>
 
 <div align="center">
-  A webhook to log actions for an online Royal Navy milsim community.
+  A webhook to log actions for a ROBLOX Royal Navy milsim community.
 </div>
 
 ## About
