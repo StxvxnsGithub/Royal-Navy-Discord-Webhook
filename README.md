@@ -15,11 +15,14 @@ Sends HTTP Requests to a Discord webhook via [WebhookProxy](https://webhook.lewi
   <li><s>Join/Leave Logging</s> COMPLETED</li>
   <li><s>Rate Limiting</s> COMPLETED</li>
   <li>Spawn Logs</li>
-  <li>Backup/secondary Webhook for error logging</li>
+  <li><s>Backup/secondary Webhook for error logging</s> COMPLETED</li>
   <li>Refactor/redesign message send delay</li>
 </ul>
 
 ## Changelog
+
+Version 0.10:  
+\- Backup/secondary Webhook for error logging  
 
 Version 0.10:  
 \- Messages passing via parameters refactored  
