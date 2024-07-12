@@ -14,14 +14,18 @@ Sends HTTP Requests to a Discord webhook via [WebhookProxy](https://webhook.lewi
 <ul>
   <li><s>Join/Leave Logging</s> COMPLETED</li>
   <li><s>Rate Limiting</s> COMPLETED</li>
-  <li>Spawn Logs</li>
+  <li><s>Spawn Logs</s> COMPLETED</li>
   <li><s>Backup/secondary Webhook for error logging</s> COMPLETED</li>
-  <li>Refactor/redesign message send delay</li>
+  <li><s>Refactor/redesign message send delay</s> COMPLETED</li>
 </ul>
 
 ## Changelog
 
-Version 0.10:  
+Version 1.0:  
+\- Rewrote queuing system for logs to improve reliability and robustness
+\- Improved error handling for a higher chance of successfully detecting and logging errors
+
+Version 0.11:  
 \- Backup/secondary Webhook for error logging  
 
 Version 0.10:  
