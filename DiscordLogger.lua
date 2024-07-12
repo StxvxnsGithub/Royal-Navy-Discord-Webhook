@@ -1,5 +1,9 @@
+----------------------------------------------
+-- Scripted by FederalDechart, federal#1678 --
+----------------------------------------------
+
 -- Discord Logger
-local versionNo = "0.11"
+local versionNo = "1.0"
 
 ----------------------------------------------
 
@@ -15,18 +19,19 @@ local ownerPing = "<@" .. config.owner .. ">"
 
 -- Settings
 local failCount = 0 	-- KEEP AS ZERO
-local maxFails = 10  	-- Maximum send fails allowed to avoid spamming the proxy
+local maxFails = 5  	-- Maximum send fails allowed to avoid spamming the proxy
 local interval = 30 	-- Seconds between sends
+local errDelay = 120	-- Seconds before error logging is attempted
 local queueSize = 20	-- Maximum items allowed in the queue
 
 -- Testing
-local testMode = false	-- Set to true if testing logger
+local testMode = true	-- Set to true if testing logger
 local enabled = testMode or not RunService:IsStudio()
 
 -- Variables
-local sending = false
+local lastSend = 0
 local queue = {}
-local errResponse, errBody
+local errResponse, errBody = "UNKNOWN ERROR", "UNKNOWN ERROR"
 
 ----------------------------------------------
 
@@ -67,9 +72,10 @@ function discord.error(errorFields)
 		print("DISCORD LOGGER: error logged.")
 		return true
 	else
-		local responseBody = response.Body:ReadAsStringAsync()
-		responseBody:GetAwaitResult()
-		warn("DISCORD LOGGER: failed to log error. ERROR: " .. response .. "; SECONDARY ERROR: " .. responseBody)
+		--local responseBody = response.Body:ReadAsStringAsync()
+		--responseBody:GetAwaitResult()
+		--warn("DISCORD LOGGER: failed to log error. ERROR: " .. response .. "; SECONDARY ERROR: " .. responseBody)
+		warn("DISCORD LOGGER: failed to log error. ERROR: " .. response)
 	end
 	return false
 end
@@ -102,42 +108,62 @@ function discord.send()
 			end)
 			
 			if success then
-				failCount = 0 -- Resets fail count upon successful send
 				print("DISCORD LOGGER: messages sent.")
+				failCount = 0 -- Resets fail count upon successful send
 				return true
 			else
 				failCount += 1
-				local responseBody = response.Body:ReadAsStringAsync()
-				responseBody:GetAwaitResult()
-				errResponse, errBody = response, responseBody
+				--local responseBody = response.Body:ReadAsStringAsync()
+				--responseBody:GetAwaitResult()
+				--errResponse, errBody = response, responseBody
 				
-				warn("DISCORD LOGGER: failed to send messages. ERROR: " .. response .. " " .. responseBody)
-				print("DISCORD LOGGER: attempting error logging...")
+				--warn("DISCORD LOGGER: failed to send messages. ERROR: " .. response .. " " .. responseBody)
+				--print("DISCORD LOGGER: attempting error logging...")
+				
+				---- As error may be due to a data format error, attempts an error log to the backup
+				--local success, response = pcall(function()
+				--	return discord.error({
+				--		{["name"] = "ERROR OCCURED", ["value"] = "Message send failed.", ["inline"] = false},
+				--		{["name"] = "ERROR DETAILS", ["value"] = errResponse .. " " .. errBody, ["inline"] = false}
+				--	})
+				--end)
+				
+				errResponse = response
+				
+				warn("DISCORD LOGGER: failed to send messages. ERROR: " .. errResponse)
 				
 				-- As error may be due to a data format error, attempts an error log to the backup
-				local success, response = pcall(function()
-					return discord.error({
-						{["name"] = "ERROR OCCURED", ["value"] = "Message send failed.", ["inline"] = false},
-						{["name"] = "ERROR DETAILS", ["value"] = errResponse .. " " .. errBody, ["inline"] = false}
-					})
+				task.delay(errDelay, function()
+					local success, response = pcall(function()
+						return discord.error({
+							{["name"] = "ERROR OCCURED", ["value"] = "Message send failed.", ["inline"] = false},
+							{["name"] = "ERROR DETAILS", ["value"] = errResponse, ["inline"] = false}
+						})
+					end)
+					if success then
+						print("DISCORD LOGGER: attempting error logging...")
+						return true
+					end
 				end)
-				if success then
-					print("DISCORD LOGGER: error logged.")
-					return true
-				end
 			end
 		elseif failCount == maxFails then -- Should only attempt logging a failure to the channel once
 			failCount += 1
 			warn("DISCORD LOGGER: failed to send messages. ERROR: send failed " .. (failCount-1) ..  " times. ACTION: halting script.")
-
-			local success, response = pcall(function()
-				return discord.error({
-					{["name"] = "ERROR OCCURED", ["value"] = "Failed to send messages " .. (failCount-1) ..  " times.", ["inline"] = false},
-					{["name"] = "ERROR ACTIONS", ["value"] = "Halted script.", ["inline"] = false}
-				})
+			
+			task.delay(errDelay, function()
+				local success, response = pcall(function()
+					return discord.error({
+						{["name"] = "ERROR OCCURED", ["value"] = "Failed to send messages " .. (failCount-1) ..  " times.", ["inline"] = false},
+						{["name"] = "ERROR ACTIONS", ["value"] = "Halted script.", ["inline"] = false}
+					})
+				end)
+				if success then
+					print("DISCORD LOGGER: attempting error logging...")
+				end
 			end)
 		else
-			warn("DISCORD LOGGER: halted due to errors. ERROR: " .. errResponse .. " " .. errBody)
+			--warn("DISCORD LOGGER: halted due to errors. ERROR: " .. errResponse .. " " .. errBody)
+			warn("DISCORD LOGGER: halted due to errors. ERROR: " .. errResponse)
 		end
 		return false
 	else
@@ -150,24 +176,35 @@ function discord.queue(method, message)
 	if enabled then
 		table.insert(queue, message)
 		
-		if not sending then
-			sending = true
-			print("DISCORD LOGGER: " .. method .. " message sending in " .. interval .. "s. MESSAGE: " .. message.value)
+		--if not sending then
+		--	sending = true
+		--	print("DISCORD LOGGER: " .. method .. " message sending in " .. interval .. "s. MESSAGE: " .. message.value)
 			
-			task.delay(interval, function()
-				if sending then
-					sending = false
-					print("DISCORD LOGGER: messages sending.")
+		--	task.delay(interval, function()
+		--		if sending then
+		--			sending = false
+		--			print("DISCORD LOGGER: messages sending.")
 					
-					local success, response = pcall(discord.send)
-					if not success then
-						warn("DISCORD LOGGER: failed to send. ERROR: " .. response)
-						discord.queue("error", response)
-					end
-				end
-			end)
+		--			local success, response = pcall(discord.send)
+		--			if not success then
+		--				warn("DISCORD LOGGER: failed to send. ERROR: " .. response)
+		--				discord.queue("error", response)
+		--			end
+		--		end
+		--	end)
+		if os.time()-lastSend >= interval then
+			lastSend = os.time()
+			print("DISCORD LOGGER: " .. method .. " message sending. MESSAGE: " .. message.value)
+			print("DISCORD LOGGER: sending messages.")
+
+			local success, response = pcall(discord.send)
+			if not success then
+				warn("DISCORD LOGGER: failed to invoke send.")
+				discord.basicSend("Failed to invoke send.")
+			end
 		elseif #queue >= queueSize then
-			sending = false
+			lastSend = os.time()
+			print("DISCORD LOGGER: " .. method .. " message sending. MESSAGE: " .. message.value)
 			warn("DISCORD LOGGER: forcing send due to queue capacity reached.")
 			
 			table.insert(queue, 
@@ -180,14 +217,27 @@ function discord.queue(method, message)
 			
 			local success, response = pcall(discord.send)
 			if not success then
-				warn("DISCORD LOGGER: failed to invoke forced send. ERROR: " .. response)
-				discord.queue("error", response)
+				warn("DISCORD LOGGER: failed to invoke forced send.")
+				discord.basicSend("Failed to invoke forced send.")
 			end
 		else
 			print("DISCORD LOGGER: " .. method .. " message queued. MESSAGE: " .. message.value)
+			
+			task.delay(interval, function()
+				if #queue > 0 then
+					lastSend = os.time()
+					print("DISCORD LOGGER: sending due messages.")
+
+					local success, response = pcall(discord.send)
+					if not success then
+						warn("DISCORD LOGGER: failed to invoke due send.")
+						discord.basicSend("Failed to invoke due send.")
+					end
+				end
+			end)
 		end 
 	else
-		warn("DISCORD LOGGER: not sent due to studio test server. " .. message.value)
+		warn("DISCORD LOGGER: message not sent due to studio test server. " .. message.value)
 	end
 	return true
 end
@@ -242,8 +292,8 @@ function discord.shutdown()
 		)
 
 		local success, response = pcall(discord.send)
-		if not success then
-			warn("DISCORD LOGGER: failed to send remaining messages when shutting down. ERROR: " .. response)
+		if not success or not response then
+			warn("DISCORD LOGGER: failed to send remaining messages when shutting down.")
 			return false
 		end
 	end
