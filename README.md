@@ -21,6 +21,12 @@ Sends HTTP Requests to a Discord webhook via [WebhookProxy](https://webhook.lewi
 
 ## Changelog
 
+Version 1.1:  
+\- Code cleaned up
+\- Optimised timestamp recording and fixed error timestamp
+\- Increased detail of errors
+\- Improved shutdown log message clarity
+
 Version 1.0:  
 \- Rewrote queuing system for logs to improve reliability and robustness
 \- Improved error handling for a higher chance of successfully detecting and logging errors
