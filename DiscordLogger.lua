@@ -3,7 +3,7 @@
 ----------------------------------------------
 
 -- Discord Logger
-local versionNo = "1.0"
+local versionNo = "1.1"
 
 ----------------------------------------------
 
@@ -25,13 +25,13 @@ local errDelay = 120	-- Seconds before error logging is attempted
 local queueSize = 20	-- Maximum items allowed in the queue
 
 -- Testing
-local testMode = true	-- Set to true if testing logger
+local testMode = false	-- Set to true if testing logger
 local enabled = testMode or not RunService:IsStudio()
 
 -- Variables
 local lastSend = 0
 local queue = {}
-local errResponse, errBody = "UNKNOWN ERROR", "UNKNOWN ERROR"
+local errCode, errStatus, errBody = "UNKNOWN", "UNKNOWN", "UNKNOWN"
 
 ----------------------------------------------
 
@@ -60,21 +60,26 @@ function discord.error(errorFields)
 			{
 				["color"] = 13908037,
 				["fields"] = fields,
-				["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S." .. math.round(tick() % 1 * 1000) .. "Z")
+				["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S", os.time() - errDelay) .. "Z"
 			}
 		}
 	}
 	
 	local success, response = pcall(function()
-		return HttpService:PostAsync(err, HttpService:JSONEncode(body)) -- Uses the webhook for errors
+		return HttpService:RequestAsync({
+			Url = err,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = HttpService:JSONEncode(body)
+		})
 	end)
-	if success then
+	
+	if success and response.Success then
 		print("DISCORD LOGGER: error logged.")
 		return true
 	else
-		--local responseBody = response.Body:ReadAsStringAsync()
-		--responseBody:GetAwaitResult()
-		--warn("DISCORD LOGGER: failed to log error. ERROR: " .. response .. "; SECONDARY ERROR: " .. responseBody)
 		warn("DISCORD LOGGER: failed to log error. ERROR: " .. response)
 	end
 	return false
@@ -98,51 +103,42 @@ function discord.send()
 					{
 						["color"] = 263491,
 						["fields"] = fields,
-						["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S." .. math.round(tick() % 1 * 1000) .. "Z")
+						["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S", os.time()) .. "Z"
 					}
 				}
 			}
-			
+
 			local success, response = pcall(function()
-				return HttpService:PostAsync(url, HttpService:JSONEncode(body))
+				return HttpService:RequestAsync({
+					Url = url,
+					Method = "POST",
+					Headers = {
+						["Content-Type"] = "application/json"
+					},
+					Body = HttpService:JSONEncode(body)
+				})
 			end)
 			
-			if success then
+			if success and response.Success then
 				print("DISCORD LOGGER: messages sent.")
 				failCount = 0 -- Resets fail count upon successful send
 				return true
 			else
-				failCount += 1
-				--local responseBody = response.Body:ReadAsStringAsync()
-				--responseBody:GetAwaitResult()
-				--errResponse, errBody = response, responseBody
+				failCount += 1			
+				errCode, errStatus, errBody = response.StatusCode, response.StatusMessage, response.Body
 				
-				--warn("DISCORD LOGGER: failed to send messages. ERROR: " .. response .. " " .. responseBody)
-				--print("DISCORD LOGGER: attempting error logging...")
+				warn("DISCORD LOGGER: failed to send messages. ERROR: " .. errCode)
 				
-				---- As error may be due to a data format error, attempts an error log to the backup
-				--local success, response = pcall(function()
-				--	return discord.error({
-				--		{["name"] = "ERROR OCCURED", ["value"] = "Message send failed.", ["inline"] = false},
-				--		{["name"] = "ERROR DETAILS", ["value"] = errResponse .. " " .. errBody, ["inline"] = false}
-				--	})
-				--end)
-				
-				errResponse = response
-				
-				warn("DISCORD LOGGER: failed to send messages. ERROR: " .. errResponse)
-				
-				-- As error may be due to a data format error, attempts an error log to the backup
+				-- Attempts an error log to the backup webhook after a delay
 				task.delay(errDelay, function()
 					local success, response = pcall(function()
 						return discord.error({
 							{["name"] = "ERROR OCCURED", ["value"] = "Message send failed.", ["inline"] = false},
-							{["name"] = "ERROR DETAILS", ["value"] = errResponse, ["inline"] = false}
+							{["name"] = "ERROR DETAILS", ["value"] = "HTTP " .. errCode .. " (" .. errStatus .. ") - " .. errBody, ["inline"] = false}
 						})
 					end)
 					if success then
 						print("DISCORD LOGGER: attempting error logging...")
-						return true
 					end
 				end)
 			end
@@ -162,8 +158,7 @@ function discord.send()
 				end
 			end)
 		else
-			--warn("DISCORD LOGGER: halted due to errors. ERROR: " .. errResponse .. " " .. errBody)
-			warn("DISCORD LOGGER: halted due to errors. ERROR: " .. errResponse)
+			warn("DISCORD LOGGER: halted due to errors. ERROR: HTTP " .. errCode .. " (" .. errStatus .. ") - " .. errBody)
 		end
 		return false
 	else
@@ -176,22 +171,6 @@ function discord.queue(method, message)
 	if enabled then
 		table.insert(queue, message)
 		
-		--if not sending then
-		--	sending = true
-		--	print("DISCORD LOGGER: " .. method .. " message sending in " .. interval .. "s. MESSAGE: " .. message.value)
-			
-		--	task.delay(interval, function()
-		--		if sending then
-		--			sending = false
-		--			print("DISCORD LOGGER: messages sending.")
-					
-		--			local success, response = pcall(discord.send)
-		--			if not success then
-		--				warn("DISCORD LOGGER: failed to send. ERROR: " .. response)
-		--				discord.queue("error", response)
-		--			end
-		--		end
-		--	end)
 		if os.time()-lastSend >= interval then
 			lastSend = os.time()
 			print("DISCORD LOGGER: " .. method .. " message sending. MESSAGE: " .. message.value)
@@ -283,10 +262,17 @@ end
 
 function discord.shutdown()
 	if enabled then
+		local status = "ERROR"
+		if #queue > 0 then
+			status = "Queued messages logged"
+		else 
+			status = "No queued messages"
+		end
+		
 		table.insert(queue, 
 			{
 				["name"] = "SERVER SHUTDOWN",
-				["value"] = "Remaining queued messages logged",
+				["value"] = status,
 				["inline"] = false
 			}
 		)
